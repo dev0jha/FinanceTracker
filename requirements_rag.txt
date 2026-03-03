@@ -1,0 +1,11 @@
+langchain
+langchain-google-genai
+chromadb
+python-dotenv
+click
+pandas
+tabulate
+flask
+flask-cors
+langchain-community
+langchain-chroma
