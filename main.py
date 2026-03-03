@@ -1,7 +1,7 @@
 import pandas as pd
 import csv
 from datetime import datetime
-from data_entry import get_amount, get_category, get_date, get_descriptipn
+from data_entry import get_amount, get_category, get_date, get_description
 import matplotlib.pyplot as plt
 
 
@@ -75,7 +75,7 @@ def add():
     )
     amount = get_amount()
     category = get_category()
-    description = get_descriptipn()
+    description = get_description()
     CSV.add_entry(date, amount, category, description)
 
 
