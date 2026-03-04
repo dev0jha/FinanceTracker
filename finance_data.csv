@@ -1,5 +1,4 @@
-date,description,amount,category
-
-01-02-2026,Grocery Shopping,150,Food
-02-02-2026, Clothes,600.0,Expense
-02-02-2026,900.0,Expense,Assests
+date,amount,category,description
+01-02-2026,150.00,Expense,Grocery Shopping
+02-02-2026,600.00,Expense,Clothes
+02-02-2026,900.00,Income,Assets03-02-2026,500.0,Expense,Grocery
