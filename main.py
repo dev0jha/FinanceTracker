@@ -5,29 +5,55 @@ from datetime import datetime
 from data_entry import (
     get_amount, get_category, get_date, get_description,
     clear_screen, success, error, warn, info, colored_input,
-    DATE_FORMAT, RESET, BOLD, DIM, RED, GREEN, YELLOW, CYAN, WHITE, MAGENTA,
+    DATE_FORMAT, console,
 )
 import matplotlib.pyplot as plt
+from rich.table import Table
+from rich.panel import Panel
+from rich.text import Text
+from rich.align import Align
+from rich.columns import Columns
+from rich.rule import Rule
+from rich.bar import Bar
+from rich.progress import BarColumn, Progress
+from rich import box
 
 
 # ── Banner ───────────────────────────────────────────────────
-BANNER = f"""
-{CYAN}{BOLD}  ╔══════════════════════════════════════════════╗
-  ║        💰  FINANCE TRACKER  💰              ║
-  ║     Track your income & expenses easily      ║
-  ╚══════════════════════════════════════════════╝{RESET}
-"""
+BANNER_TEXT = Text.from_markup(
+    "\n[bold cyan]💰  F I N A N C E   T R A C K E R  💰[/bold cyan]\n"
+    "[dim]Track your income & expenses with style[/dim]\n"
+)
 
-MENU = f"""
-  {BOLD}{WHITE}┌──────────────────────────────────────┐{RESET}
-  {BOLD}{WHITE}│{RESET}  {GREEN}1{RESET} ➜  Add Transaction                {BOLD}{WHITE}│{RESET}
-  {BOLD}{WHITE}│{RESET}  {GREEN}2{RESET} ➜  View Transactions              {BOLD}{WHITE}│{RESET}
-  {BOLD}{WHITE}│{RESET}  {GREEN}3{RESET} ➜  Dashboard (Summary)            {BOLD}{WHITE}│{RESET}
-  {BOLD}{WHITE}│{RESET}  {GREEN}4{RESET} ➜  Plot Income vs Expense         {BOLD}{WHITE}│{RESET}
-  {BOLD}{WHITE}│{RESET}  {GREEN}5{RESET} ➜  Delete Transaction             {BOLD}{WHITE}│{RESET}
-  {BOLD}{WHITE}│{RESET}  {RED}0{RESET} ➜  Exit                           {BOLD}{WHITE}│{RESET}
-  {BOLD}{WHITE}└──────────────────────────────────────┘{RESET}
-"""
+BANNER = Panel(
+    Align.center(BANNER_TEXT),
+    border_style="bold cyan",
+    box=box.DOUBLE_EDGE,
+    padding=(0, 2),
+)
+
+
+def build_menu():
+    """Build a rich-styled menu panel."""
+    menu_items = [
+        ("[bold green]1[/bold green]", "Add Transaction", "📝"),
+        ("[bold green]2[/bold green]", "View Transactions", "📋"),
+        ("[bold green]3[/bold green]", "Dashboard (Summary)", "📊"),
+        ("[bold green]4[/bold green]", "Plot Income vs Expense", "📈"),
+        ("[bold green]5[/bold green]", "Delete Transaction", "🗑️"),
+        ("[bold red]0[/bold red]", "Exit", "👋"),
+    ]
+    menu_text = "\n".join(
+        f"   {icon}  {key}  →  {label}" for key, label, icon in menu_items
+    )
+    return Panel(
+        menu_text,
+        title="[bold white]Menu[/bold white]",
+        title_align="center",
+        border_style="bright_white",
+        box=box.ROUNDED,
+        padding=(1, 3),
+    )
 
 
 class CSV:
@@ -85,86 +111,138 @@ class CSV:
 
 
 # ── Helpers ──────────────────────────────────────────────────
-def separator():
-    print(f"  {DIM}{'─' * 52}{RESET}")
-
-
 def print_table(df):
-    """Pretty-print a transactions dataframe."""
+    """Pretty-print a transactions dataframe using a Rich table."""
     if df.empty:
         warn("No transactions to display.")
         return
 
-    separator()
-    header = f"  {BOLD}{'#':>4}  {'Date':<12} {'Category':<10} {'Amount':>10}  {'Description'}{RESET}"
-    print(header)
-    separator()
+    table = Table(
+        title=None,
+        box=box.ROUNDED,
+        show_lines=False,
+        header_style="bold white",
+        border_style="bright_black",
+        padding=(0, 1),
+    )
+    table.add_column("#", style="dim", justify="right", width=5)
+    table.add_column("Date", style="white", width=12)
+    table.add_column("Category", width=10)
+    table.add_column("Amount", justify="right", width=12)
+    table.add_column("Description", style="dim white", min_width=15)
 
     for i, row in df.iterrows():
-        date_str = row["date"].strftime(CSV.FORMAT) if isinstance(row["date"], pd.Timestamp) else row["date"]
+        date_str = (
+            row["date"].strftime(CSV.FORMAT)
+            if isinstance(row["date"], pd.Timestamp)
+            else row["date"]
+        )
         cat = row["category"]
-        cat_color = GREEN if cat == "Income" else RED
+        cat_color = "green" if cat == "Income" else "red"
         sign = "+" if cat == "Income" else "-"
         amt = f"{sign}${row['amount']:.2f}"
         desc = row.get("description", "") or ""
-        print(f"  {DIM}{i:>4}{RESET}  {date_str:<12} {cat_color}{cat:<10}{RESET} {cat_color}{amt:>10}{RESET}  {desc}")
+        table.add_row(
+            str(i),
+            date_str,
+            f"[{cat_color}]{cat}[/{cat_color}]",
+            f"[bold {cat_color}]{amt}[/bold {cat_color}]",
+            desc,
+        )
 
-    separator()
+    console.print()
+    console.print(table)
+    console.print()
 
 
 def print_summary(df):
-    """Print income/expense summary for a dataframe."""
+    """Print income/expense summary with a styled panel and visual bar."""
     if df.empty:
         return
 
     total_income = df[df["category"] == "Income"]["amount"].sum()
     total_expense = df[df["category"] == "Expense"]["amount"].sum()
     net = total_income - total_expense
+    net_color = "green" if net >= 0 else "red"
+    net_icon = "▲" if net >= 0 else "▼"
 
-    print()
-    print(f"  {BOLD}{WHITE}Summary{RESET}")
-    separator()
-    print(f"    {GREEN}Income :  ${total_income:>10.2f}{RESET}")
-    print(f"    {RED}Expense:  ${total_expense:>10.2f}{RESET}")
-    separator()
-    net_color = GREEN if net >= 0 else RED
-    print(f"    {BOLD}{net_color}Net    :  ${net:>10.2f}{RESET}")
-    print()
+    # Build a visual breakdown bar
+    total = total_income + total_expense
+    if total > 0:
+        inc_pct = total_income / total * 100
+        exp_pct = total_expense / total * 100
+        bar_width = 30
+        inc_bars = round(inc_pct / 100 * bar_width)
+        exp_bars = bar_width - inc_bars
+        bar_visual = f"[green]{'█' * inc_bars}[/green][red]{'█' * exp_bars}[/red]"
+        bar_label = f"  [green]{inc_pct:.0f}% Income[/green]  [red]{exp_pct:.0f}% Expense[/red]"
+    else:
+        bar_visual = "[dim]No data[/dim]"
+        bar_label = ""
+
+    summary_text = (
+        f"  [green]Income  :[/green]  [bold green]$ {total_income:>10.2f}[/bold green]\n"
+        f"  [red]Expense :[/red]  [bold red]$ {total_expense:>10.2f}[/bold red]\n"
+        f"  {'─' * 30}\n"
+        f"  [bold {net_color}]Net {net_icon}   :  $ {net:>10.2f}[/bold {net_color}]\n\n"
+        f"  {bar_visual}\n"
+        f"{bar_label}"
+    )
+
+    summary_panel = Panel(
+        summary_text,
+        title="[bold white]💵 Financial Summary[/bold white]",
+        title_align="left",
+        border_style="bright_blue",
+        box=box.ROUNDED,
+        padding=(1, 2),
+    )
+    console.print(summary_panel)
 
 
 # ── Commands ─────────────────────────────────────────────────
+def section_header(title, icon=""):
+    """Print a styled section header."""
+    console.print()
+    console.print(Rule(f"[bold cyan]{icon}  {title}[/bold cyan]", style="cyan"))
+    console.print()
+
+
 def cmd_add():
     """Add a new transaction."""
-    print(f"\n  {BOLD}{CYAN}── Add Transaction ──{RESET}\n")
+    section_header("Add Transaction", "📝")
     CSV.initialize_csv()
-    date = get_date("Date (dd-mm-yyyy) [Enter=today]: ", allow_default=True)
+    date = get_date("Date (dd-mm-yyyy) [Enter=today]", allow_default=True)
     amount = get_amount()
     category = get_category()
     description = get_description()
     CSV.add_entry(date, amount, category, description)
 
-    cat_color = GREEN if category == "Income" else RED
-    success(f"Added: {cat_color}{category}{RESET} {GREEN}${amount:.2f}{RESET} on {date}")
+    cat_color = "green" if category == "Income" else "red"
+    console.print()
+    success(f"Added: [{cat_color}]{category}[/{cat_color}] [green]${amount:.2f}[/green] on {date}")
 
 
 def cmd_view():
     """View transactions in a date range."""
-    print(f"\n  {BOLD}{CYAN}── View Transactions ──{RESET}\n")
-    start_date = get_date("Start date (dd-mm-yyyy): ")
-    end_date = get_date("End date (dd-mm-yyyy): ")
+    section_header("View Transactions", "📋")
+    start_date = get_date("Start date (dd-mm-yyyy)")
+    end_date = get_date("End date (dd-mm-yyyy)")
     df = CSV.get_transactions(start_date, end_date)
 
     if df.empty:
         warn("No transactions found in that date range.")
     else:
-        print(f"\n  Transactions from {BOLD}{start_date}{RESET} to {BOLD}{end_date}{RESET}")
+        console.print(
+            f"\n  Transactions from [bold]{start_date}[/bold] to [bold]{end_date}[/bold]"
+        )
         print_table(df)
         print_summary(df)
 
 
 def cmd_dashboard():
     """Show overall dashboard."""
-    print(f"\n  {BOLD}{CYAN}── Dashboard ──{RESET}\n")
+    section_header("Dashboard", "📊")
     df = CSV.get_all_transactions()
 
     if df.empty:
@@ -172,21 +250,21 @@ def cmd_dashboard():
         return
 
     total = len(df)
-    info(f"Total transactions: {BOLD}{total}{RESET}")
+    info(f"Total transactions: [bold]{total}[/bold]")
 
     print_summary(df)
 
     # Show last 5 transactions
-    print(f"  {BOLD}{WHITE}Recent Transactions{RESET}")
+    console.print(Rule("[bold white]Recent Transactions[/bold white]", style="dim"))
     recent = df.tail(5)
     print_table(recent)
 
 
 def cmd_plot():
     """Plot income vs expenses over time."""
-    print(f"\n  {BOLD}{CYAN}── Plot ──{RESET}\n")
-    start_date = get_date("Start date (dd-mm-yyyy): ")
-    end_date = get_date("End date (dd-mm-yyyy): ")
+    section_header("Plot", "📈")
+    start_date = get_date("Start date (dd-mm-yyyy)")
+    end_date = get_date("End date (dd-mm-yyyy)")
     df = CSV.get_transactions(start_date, end_date)
 
     if df.empty:
@@ -209,18 +287,29 @@ def cmd_plot():
         .reindex(df.index, fill_value=0)
     )
 
-    plt.figure(figsize=(10, 5))
-    plt.plot(income_df.index, income_df["amount"], label="Income", color="#22c55e", linewidth=2)
-    plt.plot(expense_df.index, expense_df["amount"], label="Expense", color="#ef4444", linewidth=2)
-    plt.fill_between(income_df.index, income_df["amount"], alpha=0.1, color="#22c55e")
-    plt.fill_between(expense_df.index, expense_df["amount"], alpha=0.1, color="#ef4444")
-    plt.xlabel("Date")
-    plt.ylabel("Amount ($)")
-    plt.title("Income vs Expenses Over Time")
-    plt.legend()
-    plt.grid(True, alpha=0.3)
-    plt.tight_layout()
+    plt.style.use("dark_background")
+    fig, ax = plt.subplots(figsize=(10, 5))
+    fig.patch.set_facecolor("#1e1e2e")
+    ax.set_facecolor("#1e1e2e")
 
+    ax.plot(income_df.index, income_df["amount"], label="Income",
+            color="#22c55e", linewidth=2, marker="o", markersize=4)
+    ax.plot(expense_df.index, expense_df["amount"], label="Expense",
+            color="#ef4444", linewidth=2, marker="o", markersize=4)
+    ax.fill_between(income_df.index, income_df["amount"], alpha=0.15, color="#22c55e")
+    ax.fill_between(expense_df.index, expense_df["amount"], alpha=0.15, color="#ef4444")
+
+    ax.set_xlabel("Date", fontsize=11, color="#cdd6f4")
+    ax.set_ylabel("Amount ($)", fontsize=11, color="#cdd6f4")
+    ax.set_title("Income vs Expenses Over Time", fontsize=14, fontweight="bold",
+                 color="#cdd6f4", pad=15)
+    ax.legend(frameon=False, fontsize=10, labelcolor="#cdd6f4")
+    ax.grid(True, alpha=0.15, color="#6c7086")
+    ax.tick_params(colors="#6c7086")
+    for spine in ax.spines.values():
+        spine.set_color("#6c7086")
+
+    plt.tight_layout()
     info("Displaying chart...")
     plt.show()
     success("Chart closed.")
@@ -228,7 +317,7 @@ def cmd_plot():
 
 def cmd_delete():
     """Delete a transaction by index."""
-    print(f"\n  {BOLD}{CYAN}── Delete Transaction ──{RESET}\n")
+    section_header("Delete Transaction", "🗑️")
     df = CSV.get_all_transactions()
 
     if df.empty:
@@ -237,7 +326,7 @@ def cmd_delete():
 
     print_table(df)
     try:
-        idx = int(colored_input("Enter row # to delete (or -1 to cancel): "))
+        idx = int(colored_input("Enter row # to delete (or -1 to cancel)"))
         if idx == -1:
             info("Cancelled.")
             return
@@ -255,10 +344,11 @@ def main():
 
     while True:
         clear_screen()
-        print(BANNER)
-        print(MENU)
+        console.print()
+        console.print(BANNER)
+        console.print(build_menu())
 
-        choice = colored_input("Choose an option: ").strip()
+        choice = colored_input("Choose an option").strip()
 
         if choice == "1":
             cmd_add()
@@ -272,13 +362,23 @@ def main():
             cmd_delete()
         elif choice == "0":
             clear_screen()
-            print(f"\n  {CYAN}{BOLD}Thanks for using Finance Tracker! Goodbye 👋{RESET}\n")
+            goodbye = Panel(
+                Align.center(
+                    "[bold cyan]Thanks for using Finance Tracker! Goodbye 👋[/bold cyan]"
+                ),
+                border_style="cyan",
+                box=box.DOUBLE_EDGE,
+                padding=(1, 2),
+            )
+            console.print()
+            console.print(goodbye)
+            console.print()
             break
         else:
             error("Invalid choice. Please enter 0-5.")
 
         if choice in ("1", "2", "3", "4", "5"):
-            print()
+            console.print()
             colored_input("Press Enter to continue...")
 
 
